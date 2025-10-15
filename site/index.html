@@ -1,0 +1,46 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Patch & Security Advisory Portal</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:24px}
+h1{margin-bottom:6px}.meta{color:#555;margin-bottom:16px}
+.controls{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+input,select{padding:8px;font-size:14px}table{border-collapse:collapse;width:100%}
+th,td{border-bottom:1px solid #eee;padding:8px;text-align:left;vertical-align:top}
+th{cursor:pointer}.vendor{font-weight:600}.pill{display:inline-block;border:1px solid #999;border-radius:12px;padding:2px 8px;margin-right:6px;font-size:12px}
+.cves{white-space:nowrap}
+</style></head>
+<body>
+<h1>Patch & Security Advisory Portal</h1>
+<div class="meta" id="meta"></div>
+<div class="controls">
+<input id="q" type="search" placeholder="Filter by keyword, vendor, product, CVE…"/>
+<select id="vendor"><option value="">All vendors</option></select>
+<select id="age"><option value="365">Max age: 365d</option><option value="180" selected>Max age: 180d</option><option value="90">Max age: 90d</option><option value="30">Max age: 30d</option><option value="7">Max age: 7d</option></select>
+</div>
+<table id="tbl"><thead><tr><th data-k="published">Published</th><th data-k="vendor">Vendor</th><th data-k="title">Title</th><th>CVEs</th></tr></thead><tbody></tbody></table>
+<script>
+const state={sortKey:"published",sortDir:"desc",data:[]};
+function fmtDate(iso){if(!iso)return"";try{return new Date(iso).toLocaleString()}catch(e){return iso}}
+function render(rows){const tb=document.querySelector("#tbl tbody");tb.innerHTML="";for(const r of rows){const tr=document.createElement("tr");tr.innerHTML=`
+<td>${fmtDate(r.published)}</td>
+<td class="vendor">${r.vendor||""}</td>
+<td><div><a href="${r.url}" target="_blank" rel="noopener">${r.title||""}</a></div>
+<div style="color:#555;font-size:13px;">${r.summary||""}</div></td>
+<td class="cves">${(r.cve_ids||[]).map(c=>`<span class="pill">${c}</span>`).join(" ")}</td>`;tb.appendChild(tr);}}
+function applyFilters(){const q=document.getElementById("q").value.trim().toLowerCase();
+const vend=document.getElementById("vendor").value;const maxAge=parseInt(document.getElementById("age").value,10);
+const now=Date.now();const rows=state.data.filter(r=>{const ageOk=!r.published||(now-new Date(r.published).getTime())/86400000<=maxAge;
+const text=`${r.vendor||""} ${r.title||""} ${r.summary||""} ${(r.cve_ids||[]).join(" ")}`.toLowerCase();const qOk=!q||text.includes(q);
+const vOk=!vend||r.vendor===vend;return ageOk&&qOk&&vOk;}).sort((a,b)=>{const k=state.sortKey;const av=a[k]||"";const bv=b[k]||"";
+const cmp=(av>bv)?1:((av<bv)?-1:0);return state.sortDir==="asc"?cmp:-cmp;});render(rows);}
+function setVendors(d){const sel=document.getElementById("vendor");const vendors=Array.from(new Set(d.map(x=>x.vendor).filter(Boolean))).sort();
+for(const v of vendors){const o=document.createElement("option");o.value=v;o.textContent=v;sel.appendChild(o);}}
+function initSort(){document.querySelectorAll("th[data-k]").forEach(th=>{th.addEventListener("click",()=>{const k=th.getAttribute("data-k");
+if(state.sortKey===k)state.sortDir=state.sortDir==="asc"?"desc":"asc";else{state.sortKey=k;state.sortDir="asc";}applyFilters();});});}
+fetch("advisories.json").then(r=>r.json()).then(j=>{state.data=j.items||[];document.getElementById("meta").textContent=`Items: ${j.count||state.data.length} • Generated: ${j.generated_at||""}`;
+setVendors(state.data);initSort();applyFilters();}).catch(e=>{document.getElementById("meta").textContent="advisories.json not found yet. The workflow generates it on the next run.";});
+document.getElementById("q").addEventListener("input",applyFilters);document.getElementById("vendor").addEventListener("change",applyFilters);
+document.getElementById("age").addEventListener("change",applyFilters);
+</script>
+</body></html>
